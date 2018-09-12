@@ -1,6 +1,6 @@
-# rf-form
+# rf-forms
 
-[![Clojars Project](https://img.shields.io/clojars/v/com.workframe/rf-form.svg)](https://clojars.org/com.workframe/rf-form)
+[![Clojars Project](https://img.shields.io/clojars/v/com.workframe/rf-forms.svg)](https://clojars.org/com.workframe/rf-forms)
 
 Form state management for re-frame
 

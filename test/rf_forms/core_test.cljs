@@ -1,10 +1,10 @@
-(ns rf-form.core-test
+(ns rf-forms.core-test
   (:require [cljs.test :refer-macros [deftest is testing run-tests]]
-            [rf-form.core :as rf]
+            [rf-forms.core :as rf]
             [rf-utils.core :as rfu]))
 
 (deftest testing
-  (testing "ok"
+  (testing "they are equal"
     (is (= "yea" "yea"))))
 
 (comment

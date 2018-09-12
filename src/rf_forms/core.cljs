@@ -1,4 +1,4 @@
-(ns rf-form.core
+(ns rf-forms.core
   (:require
     ["prop-types" :as prop-types]
     [clojure.string :refer [join]]
