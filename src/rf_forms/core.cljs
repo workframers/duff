@@ -201,18 +201,74 @@
                             (dissoc props :name :component :format :parse :getter :sync?))]
            children)))}))
 
-(defn wrap-field [path component]
-  (let [opts (if (fn? component)
-               {:component component}
-               component)]
-    [field (merge {:name path}
-             opts)]))
+(defn get-initial-value [props initial-value]
+  (if (some true? ((juxt fn? keyword?) initial-value))
+    (initial-value props)
+    initial-value))
 
-(defn make-fields-map [spec]
-  (reduce-kv (fn [acc k v]
-               (assoc acc k (wrap-field k v)))
-    {}
-    spec))
+(defn make-form-props [{:keys [on-submit before-submit]
+                        :or   {before-submit (fn [_ done] (done))}
+                        :as   props}
+                       {:keys [form-name
+                               initial-value
+                               validate
+                               persist?]
+                        :or   {initial-value noop
+                               validate      noop}
+                        :as   config}]
+  (let [state      (query form-name :value)
+        pristine?  (= state initial-value)
+        errors     (query form-name :errors)
+        submitted? (query form-name :submitted?)
+        valid?     (empty? errors)
+        invalid?   (not valid?)]
+    (merge props
+           {:handle-submit (fn [e]
+                             (.preventDefault e)
+                             (when valid?
+                               (before-submit state
+                                              (fn []
+                                                (rfu/assoc-in-sync [:forms form-name :submitted?] true)
+                                                (on-submit state)))))
+            :values        state
+            :pristine?     pristine?
+            :errors        errors
+            :dirty?        (not pristine?)
+            :reset         #(initialize-state {:name          form-name
+                                               :value         initial-value
+                                               :initial-value initial-value
+                                               :validate      validate})
+            :submitted?    submitted?
+            :valid?        valid?
+            :invalid?      invalid?
+            :disabled?     (or submitted? invalid?)})))
+
+(defn create-form*
+  ([config]
+   (fn [component]
+     (create-form* config component)))
+  ([{:keys [form-name
+            initial-value
+            validate
+            persist?]
+     :or   {initial-value noop
+            validate      noop}
+     :as   initial-config}
+    component]
+   (fn []
+     (r/with-let [props         (r/props (r/current-component))
+                  initial-value (get-initial-value props initial-value)
+                  form-config   (assoc initial-config :initial-value initial-value)
+                  _             (initialize-state {:name          form-name
+                                                   :value         initial-value
+                                                   :initial-value initial-value
+                                                   :validate      validate})]
+       [component (make-form-props (r/props (r/current-component))
+                                   form-config)]
+       (finally
+         (rfu/update :active-forms disj form-name)
+         (when (not persist?)
+           (rfu/dissoc-in [:forms form-name])))))))
 
 (defn create-form [{:keys [form-name
                            initial-value
@@ -284,5 +340,4 @@
                                 :valid?        valid?
                                 :invalid?      invalid?
                                 :disabled?     (or submitted? invalid?)}
-                          (when fields {:fields (make-fields-map fields)})
                           props)]))}))))
