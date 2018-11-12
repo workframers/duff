@@ -1,9 +1,18 @@
 {:deps true
 
  :builds
- {:test {:target     :browser-test
-         :test-dir   "out/test"
-         :devtools   {:http-port 8606
-                      :http-root "out/test"}
-         :js-options {:resolve {"object.assign" {:target  :npm
-                                                 :require "object-assign"}}}}}}
+ {:examples {:target   :browser
+             :modules  {:main {:entries [examples.core]}}
+             :dev      {:output-dir "resources/public/js/compiled/examples"
+                        :asset-path "/js/compiled/examples"}
+             :devtools {:loader-mode :eval
+                        :http-root   "resources/public"
+                        :http-host   "0.0.0.0"
+                        :http-port   3449
+                        :after-load  examples.core/mount-root}}
+  :test     {:target     :browser-test
+             :test-dir   "out/test"
+             :devtools   {:http-port 8606
+                          :http-root "out/test"}
+             :js-options {:resolve {"object.assign" {:target  :npm
+                                                     :require "object-assign"}}}}}}

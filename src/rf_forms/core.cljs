@@ -1,11 +1,11 @@
 (ns rf-forms.core
   (:require
-    ["prop-types" :as prop-types]
-    [clojure.string :refer [join]]
-    [goog.object :as obj]
-    [rf-utils.core :as rfu :refer [collify]]
-    [re-frame.core :as rf]
-    [reagent.core :as r]))
+   ["prop-types" :as prop-types]
+   [clojure.string :refer [join]]
+   [goog.object :as obj]
+   [rf-utils.core :as rfu :refer [collify]]
+   [re-frame.core :as rf]
+   [reagent.core :as r]))
 
 (def noop (constantly nil))
 
@@ -124,6 +124,8 @@
 (defn- get-field-props [ctx field-name]
   (let [form-name           (obj/get ctx "form-name")
         get-initial-value   (obj/get ctx "get-initial-value")
+        validate-fn         (obj/get ctx "validate")
+        getter-fn           #(obj/getValueByKeys % "target" "value")
         path-in-state       [:forms form-name field-name]
         form-value          [:forms form-name]
         initial-field-value (get (get-initial-value) field-name)
@@ -135,6 +137,10 @@
      :value         field-value
      :errors        errors
      :pristine?     pristine?
+     :on-change     #(rf/dispatch [::on-change {:value       (getter-fn %)
+                                                :form-name   form-name
+                                                :validate-fn validate-fn
+                                                :field-name  field-name}])
      :dirty?        dirty?}))
 
 (defn connect-to-fields
@@ -143,19 +149,19 @@
   ([fields component opts]
    (fn [props]
      (r/create-class
-       {:display-name (str "Connect-to-fields: " (join ", " (map name fields)))
+      {:display-name (str "Connect-to-fields: " (join ", " (map name fields)))
 
-        :context-types context-shape
+       :context-types context-shape
 
-        :reagent-render
-        (fn [props]
-          (let [this                (r/current-component)
-                ctx                 (obj/get this "context")
-                fields-props (reduce (fn [acc field-name]
-                                       (assoc acc field-name (get-field-props ctx field-name)))
-                               {}
-                               fields)]
-            [component (merge fields-props opts)]))}))))
+       :reagent-render
+       (fn [props]
+         (let [this         (r/current-component)
+               ctx          (obj/get this "context")
+               fields-props (reduce (fn [acc field-name]
+                                      (assoc acc field-name (get-field-props ctx field-name)))
+                                    {}
+                                    fields)]
+           [component (merge props fields-props opts)]))}))))
 
 (defn field [{:keys [name]}]
   "Wraps a dumb form component and connects it to the global form state"
@@ -168,8 +174,7 @@
      (fn [{:keys [name component format parse getter sync?]
            :or   {format identity
                   parse  identity
-                  getter #(obj/getValueByKeys % "target" "value")
-                  sync?  false}
+                  getter #(obj/getValueByKeys % "target" "value")}
            :as   props}]
        (let [this                (r/current-component)
              ctx                 (obj/get this "context")
@@ -179,7 +184,7 @@
              path-in-state       [:forms form-name name]
              initial-field-value (get (get-initial-value) name)
              field-value         (rfu/get-in path-in-state)
-             dispatch-fn         (if sync? rf/dispatch-sync rf/dispatch)
+             dispatch-fn         (if (false? sync?) rf/dispatch rf/dispatch-sync)
              on-change           #(dispatch-fn [::on-change {:value       (parse (getter %))
                                                              :form-name   form-name
                                                              :validate-fn validate-fn
@@ -201,74 +206,18 @@
                             (dissoc props :name :component :format :parse :getter :sync?))]
            children)))}))
 
-(defn get-initial-value [props initial-value]
-  (if (some true? ((juxt fn? keyword?) initial-value))
-    (initial-value props)
-    initial-value))
+(defn wrap-field [path component]
+  (let [opts (if (fn? component)
+               {:component component}
+               component)]
+    [field (merge {:name path}
+             opts)]))
 
-(defn make-form-props [{:keys [on-submit before-submit]
-                        :or   {before-submit (fn [_ done] (done))}
-                        :as   props}
-                       {:keys [form-name
-                               initial-value
-                               validate
-                               persist?]
-                        :or   {initial-value noop
-                               validate      noop}
-                        :as   config}]
-  (let [state      (query form-name :value)
-        pristine?  (= state initial-value)
-        errors     (query form-name :errors)
-        submitted? (query form-name :submitted?)
-        valid?     (empty? errors)
-        invalid?   (not valid?)]
-    (merge props
-           {:handle-submit (fn [e]
-                             (.preventDefault e)
-                             (when valid?
-                               (before-submit state
-                                              (fn []
-                                                (rfu/assoc-in-sync [:forms form-name :submitted?] true)
-                                                (on-submit state)))))
-            :values        state
-            :pristine?     pristine?
-            :errors        errors
-            :dirty?        (not pristine?)
-            :reset         #(initialize-state {:name          form-name
-                                               :value         initial-value
-                                               :initial-value initial-value
-                                               :validate      validate})
-            :submitted?    submitted?
-            :valid?        valid?
-            :invalid?      invalid?
-            :disabled?     (or submitted? invalid?)})))
-
-(defn create-form*
-  ([config]
-   (fn [component]
-     (create-form* config component)))
-  ([{:keys [form-name
-            initial-value
-            validate
-            persist?]
-     :or   {initial-value noop
-            validate      noop}
-     :as   initial-config}
-    component]
-   (fn []
-     (r/with-let [props         (r/props (r/current-component))
-                  initial-value (get-initial-value props initial-value)
-                  form-config   (assoc initial-config :initial-value initial-value)
-                  _             (initialize-state {:name          form-name
-                                                   :value         initial-value
-                                                   :initial-value initial-value
-                                                   :validate      validate})]
-       [component (make-form-props (r/props (r/current-component))
-                                   form-config)]
-       (finally
-         (rfu/update :active-forms disj form-name)
-         (when (not persist?)
-           (rfu/dissoc-in [:forms form-name])))))))
+(defn make-fields-map [spec]
+  (reduce-kv (fn [acc k v]
+               (assoc acc k (wrap-field k v)))
+    {}
+    spec))
 
 (defn create-form [{:keys [form-name
                            initial-value
@@ -322,12 +271,14 @@
                  valid?        (empty? errors)
                  invalid?      (not valid?)]
              [component (merge {:handle-submit (fn [e]
-                                                 (.preventDefault e)
-                                                 (when valid?
-                                                   (before-submit state
-                                                                  (fn []
-                                                                    (rfu/assoc-in-sync [:forms form-name :submitted?] true)
-                                                                    (on-submit state)))))
+                                                 (let [state (query form-name :value)
+                                                       valid? (empty? errors)]
+                                                   (.preventDefault e)
+                                                   (when valid?
+                                                     (before-submit state
+                                                                    (fn []
+                                                                      (rfu/assoc-in-sync [:forms form-name :submitted?] true)
+                                                                      (on-submit state))))))
                                 :values        state
                                 :pristine?     pristine?
                                 :errors        errors
@@ -340,4 +291,5 @@
                                 :valid?        valid?
                                 :invalid?      invalid?
                                 :disabled?     (or submitted? invalid?)}
+                          (when fields {:fields (make-fields-map fields)})
                           props)]))}))))

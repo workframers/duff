@@ -13,7 +13,7 @@ pom.xml.asc
 /.nrepl-port
 .hgignore
 .hg/
-/resources/js/
+/resources/public/js
 *.DS_Store
 /resources/.github-token
 node_modules/

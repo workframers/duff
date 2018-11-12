@@ -3,7 +3,8 @@
   "license": "Apache-2.0",
   "private": true,
   "scripts": {
-    "test": "shadow-cljs -A:test watch test"
+    "test": "shadow-cljs -A:debux:test watch test",
+    "examples": "shadow-cljs -A:debux:examples watch examples"
   },
   "devDependencies": {
     "create-react-class": "^15.6.3",
