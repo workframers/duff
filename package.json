@@ -1,7 +1,6 @@
 {
-  "name": "rf-forms",
+  "name": "Duff",
   "license": "Apache-2.0",
-  "private": true,
   "scripts": {
     "test": "shadow-cljs -A:debux:test watch test",
     "examples": "shadow-cljs -A:debux:examples watch examples"
@@ -15,5 +14,8 @@
     "react": "^16.4.0",
     "react-dom": "^16.4.0",
     "shadow-cljs": "^2.4.22"
+  },
+  "dependencies": {
+    "glamor": "^2.20.40"
   }
 }

@@ -1,6 +1,6 @@
-# rf-forms
+![](https://raw.githubusercontent.com/workframers/duff/master/resources/duff-logo.jpg)
 
-[![Clojars Project](https://img.shields.io/clojars/v/com.workframe/rf-forms.svg)](https://clojars.org/com.workframe/rf-forms)
+[![Clojars Project](https://img.shields.io/clojars/v/com.workframe/duff.svg)](https://clojars.org/com.workframe/duff)
 
 Form state management for re-frame
 

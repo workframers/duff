@@ -1,4 +1,4 @@
-(defproject com.workframe/rf-forms "0.1.0-SNAPSHOT"
+(defproject com.workframe/duff "0.1.0-SNAPSHOT"
   :description "Form state management for re-frame"
   :url         "https://github.com/workframers/rf-forms"
   :license     {:name "Apache License, Version 2.0"

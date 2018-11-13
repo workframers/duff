@@ -6,6 +6,7 @@
         reagent                   {:mvn/version "0.8.1"}
         re-frame                  {:mvn/version "0.10.5"}
         lilactown/reagent-context {:mvn/version "0.0.2"}
+        com.workframe/wonka       {:mvn/version "0.1.0-SNAPSHOT"}
         com.workframe/rf-utils    {:mvn/version "0.1.0-SNAPSHOT"}}
 
  :aliases
