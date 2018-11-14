@@ -1,4 +1,4 @@
-![](https://raw.githubusercontent.com/workframers/duff/master/resources/duff-logo.png)
+<img src="https://raw.githubusercontent.com/workframers/duff/master/resources/duff-logo.png" width="442px">
 
 [![Clojars Project](https://img.shields.io/clojars/v/com.workframe/duff.svg)](https://clojars.org/com.workframe/duff)
 
