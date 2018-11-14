@@ -9,6 +9,31 @@
 
 (def noop (constantly nil))
 
+(def component-partial
+  "`component-partial` takes a component and map of props, and returns a component}
+   that when rendered, will merge the partially applied map of props to the props
+   passed in at runtime. This is useful if you need to partially apply props to a
+   component before passing it a helper which will render it later with additional
+   props (e.g. form utils).
+
+   We use memoize so that you can partially apply components
+   in render methods. If we didn't memoize, a new version would be created every
+   re-render. This is particularly bad if the component you're using it on is a
+   form input. because every value change will cause the input to lose focus.
+
+   (def header (component-partial some-other-header {:size :small}))
+   [header {:style {:margin-top 5}}] => props passed to `some-other-header`
+
+   would be {:style {:margin-top 5} :size :small}
+  "
+  (memoize
+    (fn [c p & children]
+      (fn []
+        (let [this     (r/current-component)
+              props    (r/props this)]
+          (into [c (r/merge-props props p)]
+                children))))))
+
 (defn clean [data]
   "removes util specific properties from a map. used to clean props before
   being passed along to native react components"
@@ -21,9 +46,6 @@
     :submitted?
     :field-name
     :errors?))
-
-(defn make-toast-id []
-  (.getTime (js/Date.)))
 
 (defn query
   [form-name query-key]
@@ -201,6 +223,7 @@
                                   :pristine?  pristine?
                                   :dirty?     dirty?
                                   :errors     errors
+                                  :errors?    (and errors dirty?)
                                   :field-name name
                                   :on-change  on-change}
                             (dissoc props :name :component :format :parse :getter :sync?))]
