@@ -1,4 +1,4 @@
-(ns rf-forms.core-test
+(ns duff.core-test
   (:require [cljs.test :refer-macros [deftest is testing run-tests]]
             [reagent.core :as r]
             [rf-forms.core :as rf]
