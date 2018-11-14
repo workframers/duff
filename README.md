@@ -57,7 +57,8 @@ Ex:
                 (when (empty? (:email form-val))
                   {:email "Email can't be blank."}))
     ;; I think normally the default of false works for most cases
-    :persist? true}))
+    :persist? true}
+   my-form*))
     
 (defn my-form-app []
   (let [email (get-user-email-somehow)]
