@@ -101,7 +101,7 @@ Full list here:
  :field-name "The name of the field"}
 ```
 
-An example wrapping a native input is in the example above, but for a 'cusome field', could look something like:
+An example wrapping a native input is in the example above, but for a 'custom field', could look something like:
 
 ```clojure
 (defn custom-field [{:keys [value on-change errors errors?]}]
