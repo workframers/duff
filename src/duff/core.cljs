@@ -74,17 +74,18 @@
                    db
                    [:forms form-name :validating field-name]
                    (fn [_] validating-message))]
-      (prn "starts")
       {:db new-db})))
 
 (rf/reg-event-fx
   ::on-validation-end
-  (fn [{:keys [db]} [_ {:keys [form-name field-name]}]]
-    (let [new-db (update-in
-                   db
-                   [:forms form-name :errors field-name]
-                   (fn [_] ["wonderful"]))]
-      (prn (get-in new-db [:forms form-name :errors]))
+  (fn [{:keys [db]} [_ {:keys [form-name field-name result]}]]
+    (let [{:keys [success errors]} result
+          new-db (if errors
+                   (assoc-in
+                     db
+                     [:forms form-name :errors field-name]
+                     errors)
+                   db)]
       {:db new-db})))
 
 (defn start-validation [form-name field-name validating-message]
@@ -94,12 +95,12 @@
       :field-name         field-name
       :validating-message validating-message}]))
 
-;; todo - errors or success msg here
-(defn end-validation [form-name field-name error-or-success-arg?]
+(defn end-validation [form-name field-name result]
   (rf/dispatch
     [::on-validation-end
-     {:form-name          form-name
-      :field-name         field-name}]))
+     {:result     result
+      :form-name  form-name
+      :field-name field-name}]))
 
 (defn initialize-state
   "fired once when create-form mounts"
