@@ -37,7 +37,8 @@
 (defn clean [data]
   "removes util specific properties from a map. used to clean props before
   being passed along to native react components"
-  (dissoc data
+  (dissoc
+    data
     :errors
     :pristine?
     :value?
@@ -45,7 +46,8 @@
     :initial-value
     :submitted?
     :field-name
-    :errors?))
+    :errors?
+    :validating))
 
 (defn query
   [form-name query-key]
@@ -55,6 +57,7 @@
     (case query-key
       :pristine?       (= form-state (get* :initial-value))
       :errors          (get* :errors)
+      :validating      (get* :validating)
       :dirty?          (not (query form-name :pristine?))
       :value           form-state
       :valid?          (empty? (get* :errors))
@@ -64,13 +67,47 @@
                             (not (query form-name :submitted?)))
       nil)))
 
+(rf/reg-event-fx
+  ::on-validation-start
+  (fn [{:keys [db]} [_ {:keys [form-name field-name validating-message]}]]
+    (let [new-db (update-in
+                   db
+                   [:forms form-name :validating field-name]
+                   (fn [_] validating-message))]
+      (prn "starts")
+      {:db new-db})))
+
+(rf/reg-event-fx
+  ::on-validation-end
+  (fn [{:keys [db]} [_ {:keys [form-name field-name]}]]
+    (let [new-db (update-in
+                   db
+                   [:forms form-name :errors field-name]
+                   (fn [_] ["wonderful"]))]
+      (prn (get-in new-db [:forms form-name :errors]))
+      {:db new-db})))
+
+(defn start-validation [form-name field-name validating-message]
+  (rf/dispatch
+    [::on-validation-start
+     {:form-name          form-name
+      :field-name         field-name
+      :validating-message validating-message}]))
+
+;; todo - errors or success msg here
+(defn end-validation [form-name field-name error-or-success-arg?]
+  (rf/dispatch
+    [::on-validation-end
+     {:form-name          form-name
+      :field-name         field-name}]))
+
 (defn initialize-state
   "fired once when create-form mounts"
   [{:keys [name value validate initial-value]}]
   (if (rfu/get :active-forms)
     (rfu/update-sync :active-forms conj name)
     (rfu/assoc-sync :active-forms #{name}))
-  (rfu/assoc-in-sync [:forms name] (merge value {:errors        (validate value)
+  (rfu/assoc-in-sync [:forms name] (merge value {:errors        (validate value name start-validation end-validation)
                                                  :initial-value (or initial-value {})})))
 
 (rf/reg-sub
@@ -83,13 +120,18 @@
 ;; used internally by the field component
 (rf/reg-event-fx
   ::on-change
-  (fn [{:keys [db]} [_ {:keys [value form-name field-name validate-fn]
-                        :as   event-args}]]
+  (fn [{:keys [db]} [_ {:keys [value form-name field-name validate-fn]}]]
     (let [new-db (update-in db [:forms form-name] (fn [form-state]
                                                     (let [new-form-state (assoc form-state field-name value)]
-                                                      (assoc new-form-state
-                                                        :errors
-                                                        (validate-fn new-form-state)))))]
+                                                      (assoc-in
+                                                        new-form-state
+                                                        [:errors field-name]
+                                                        (validate-fn
+                                                          new-form-state
+                                                          form-name
+                                                          field-name
+                                                          start-validation
+                                                          end-validation)))))]
       {:db new-db})))
 
 (defn merge-props [form-props rest]
@@ -111,36 +153,54 @@
                         :get-initial-value prop-types/func.isRequired
                         :validate          prop-types/func.isRequired})
 
-(defn make-validation [spec]
-  "
-    Usage:
+(defn field-errors [vals form-name field-name fns start-validation end-validation]
+  (let [fns       (collify fns)
+        field-val (get vals field-name)
+        errors    (mapv
+                    (fn [validation]
+                      (if (map? validation)
+                        (let [{:keys [pred text]} validation]
+                          (when (pred field-val)
+                            text))
+                        (validation
+                          field-val
+                          (partial start-validation form-name field-name)
+                          (partial end-validation form-name field-name))))
+                    fns)]
+    (when-not (every? nil? errors)
+      errors)))
 
+;; todo - docs
+(defn make-validation
+  "Usage:
     (def validation (fu/make-validation {:title           [{:pred empty?
                                                             :text \"Enter title to save changes\"}
                                                            {:pred (fn [val] (> 5 (count val)))
                                                             :text \"must be more than five characters\"}]
+                                        :email            (fn [value start-validation end-validation]
+                                                             )
                                         :address/line-1   :required ;; <- todo , keyword shortcuts
                                         :address/city     :required
                                         :address/zip-code :required}))
   "
-  (fn [vals]
-    (let [result (reduce-kv (fn [acc field-key fns*]
-                              (let [fns       (collify fns*)
-                                    field-val (get vals field-key)
-                                    errors    (mapv (fn [validation]
-                                                      (if (map? validation)
-                                                        (let [{:keys [pred text]} validation]
-                                                          (when (pred field-val)
-                                                            text))
-                                                        (validation field-val)))
-                                                fns)]
-                                (if (every? nil? errors)
-                                  acc
-                                  (assoc acc field-key errors))))
-                   {}
-                   spec)]
-      (when (not (empty? result))
-        result))))
+  [spec]
+  (fn
+    ([vals form-name start-validation end-validation]
+     (let [result (reduce-kv (fn [acc field-name fns*]
+                               (let [errors (field-errors
+                                              vals form-name field-name fns*
+                                              start-validation end-validation)]
+                                 (if errors
+                                   (assoc acc field-name errors)
+                                   acc)))
+                             {}
+                             spec)]
+       (when (not (empty? result))
+         result)))
+    ([vals form-name field-name start-validation end-validation]
+     (field-errors
+       vals form-name field-name (get spec field-name)
+       start-validation end-validation))))
 
 ;;TODO refactor and use this in field function
 (defn- get-field-props [ctx field-name]
@@ -153,11 +213,13 @@
         initial-field-value (get (get-initial-value) field-name)
         field-value         (rfu/get-in path-in-state)
         errors              (rfu/get-in [:forms form-name :errors field-name])
+        validating          (rfu/get-in [:forms form-name :validating field-name])
         pristine?           (= field-value initial-field-value)
         dirty?              (not pristine?)]
     {:initial-value initial-field-value
      :value         field-value
      :errors        errors
+     :validating    validating
      :pristine?     pristine?
      :on-change     #(rf/dispatch [::on-change {:value       (getter-fn %)
                                                 :form-name   form-name
@@ -212,6 +274,7 @@
                                                              :validate-fn validate-fn
                                                              :field-name  name}])
              errors              (rfu/get-in [:forms form-name :errors name])
+             validating          (rfu/get-in [:forms form-name :validating name])
              pristine?           (= field-value initial-field-value)
              dirty?              (not pristine?)
              value               (format field-value)
@@ -224,6 +287,7 @@
                                   :dirty?     dirty?
                                   :errors     errors
                                   :errors?    (and errors dirty?)
+                                  :validating validating
                                   :field-name name
                                   :on-change  on-change}
                             (dissoc props :name :component :format :parse :getter :sync?))]
@@ -290,6 +354,7 @@
                  initial-value (get-initial-value)
                  pristine?     (= state initial-value)
                  errors        (query form-name :errors)
+                 validating    (query form-name :validating)
                  submitted?    (query form-name :submitted?)
                  valid?        (empty? errors)
                  invalid?      (not valid?)]
@@ -305,6 +370,7 @@
                                 :values        state
                                 :pristine?     pristine?
                                 :errors        errors
+                                :validating    validating
                                 :dirty?        (not pristine?)
                                 :reset         #(initialize-state {:name          form-name
                                                                    :value         initial-value
