@@ -372,7 +372,7 @@
                  success       (query form-name :success)
                  validating    (query form-name :validating)
                  submitted?    (query form-name :submitted?)
-                 valid?        (empty? errors)
+                 valid?        (and (empty? errors) (empty? validating))
                  invalid?      (not valid?)]
              [component (merge {:handle-submit (fn [e]
                                                  (let [state (query form-name :value)
