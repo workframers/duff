@@ -85,7 +85,12 @@
                      db
                      [:forms form-name :errors field-name]
                      errors)
-                   db)]
+                   db)
+          new-db (update-in
+                   new-db
+                   [:forms form-name :validating]
+                   (fn [validating]
+                     (dissoc validating field-name)))]
       {:db new-db})))
 
 (defn start-validation [form-name field-name validating-message]
