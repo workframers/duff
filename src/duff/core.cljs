@@ -181,7 +181,6 @@
     (when-not (every? nil? errors)
       errors)))
 
-;; todo - docs
 (defn make-validation
   "Usage:
     (def validation (fu/make-validation {:title           [{:pred empty?
@@ -189,7 +188,11 @@
                                                            {:pred (fn [val] (> 5 (count val)))
                                                             :text \"must be more than five characters\"}]
                                         :email            (fn [value start-validation end-validation]
-                                                             )
+                                                             (start-validation \"Checking email...\")
+                                                             (graphql-query
+                                                               {:email value
+                                                                :on-success #(end-validation {:success \"Email can be added.\"})
+                                                                :on-error #(end-validation {:errors [\"Email already exists.\"]})}))
                                         :address/line-1   :required ;; <- todo , keyword shortcuts
                                         :address/city     :required
                                         :address/zip-code :required}))
