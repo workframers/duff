@@ -47,6 +47,7 @@
     :submitted?
     :field-name
     :errors?
+    :success
     :validating))
 
 (defn query
@@ -57,6 +58,7 @@
     (case query-key
       :pristine?       (= form-state (get* :initial-value))
       :errors          (get* :errors)
+      :success         (get* :success)
       :validating      (get* :validating)
       :dirty?          (not (query form-name :pristine?))
       :value           form-state
@@ -72,6 +74,13 @@
   (fn [{:keys [db]} [_ {:keys [form-name field-name validating-message]}]]
     (let [new-db (update-in
                    db
+                   [:forms form-name]
+                   (fn [{:keys [success errors] :as form-data}]
+                     (assoc form-data
+                       :success (dissoc success field-name)
+                       :errors (dissoc errors field-name))))
+          new-db (update-in
+                   new-db
                    [:forms form-name :validating field-name]
                    (fn [_] validating-message))]
       {:db new-db})))
@@ -80,12 +89,10 @@
   ::on-validation-end
   (fn [{:keys [db]} [_ {:keys [form-name field-name result]}]]
     (let [{:keys [success errors]} result
-          new-db (if errors
-                   (assoc-in
-                     db
-                     [:forms form-name :errors field-name]
-                     errors)
-                   db)
+          new-db (cond
+                   errors (assoc-in db [:forms form-name :errors field-name] errors)
+                   success (assoc-in db [:forms form-name :success field-name] success)
+                   :default db)
           new-db (update-in
                    new-db
                    [:forms form-name :validating]
@@ -219,12 +226,14 @@
         initial-field-value (get (get-initial-value) field-name)
         field-value         (rfu/get-in path-in-state)
         errors              (rfu/get-in [:forms form-name :errors field-name])
+        success             (rfu/get-in [:forms form-name :success field-name])
         validating          (rfu/get-in [:forms form-name :validating field-name])
         pristine?           (= field-value initial-field-value)
         dirty?              (not pristine?)]
     {:initial-value initial-field-value
      :value         field-value
      :errors        errors
+     :success       success
      :validating    validating
      :pristine?     pristine?
      :on-change     #(rf/dispatch [::on-change {:value       (getter-fn %)
@@ -280,6 +289,7 @@
                                                              :validate-fn validate-fn
                                                              :field-name  name}])
              errors              (rfu/get-in [:forms form-name :errors name])
+             success             (rfu/get-in [:forms form-name :success name])
              validating          (rfu/get-in [:forms form-name :validating name])
              pristine?           (= field-value initial-field-value)
              dirty?              (not pristine?)
@@ -293,6 +303,7 @@
                                   :dirty?     dirty?
                                   :errors     errors
                                   :errors?    (and errors dirty?)
+                                  :success    success
                                   :validating validating
                                   :field-name name
                                   :on-change  on-change}
@@ -360,6 +371,7 @@
                  initial-value (get-initial-value)
                  pristine?     (= state initial-value)
                  errors        (query form-name :errors)
+                 success       (query form-name :success)
                  validating    (query form-name :validating)
                  submitted?    (query form-name :submitted?)
                  valid?        (empty? errors)
@@ -376,6 +388,7 @@
                                 :values        state
                                 :pristine?     pristine?
                                 :errors        errors
+                                :success       success
                                 :validating    validating
                                 :dirty?        (not pristine?)
                                 :reset         #(initialize-state {:name          form-name
