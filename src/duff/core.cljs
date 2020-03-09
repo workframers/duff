@@ -74,13 +74,6 @@
   (fn [{:keys [db]} [_ {:keys [form-name field-name validating-message]}]]
     (let [new-db (update-in
                    db
-                   [:forms form-name]
-                   (fn [{:keys [success errors] :as form-data}]
-                     (assoc form-data
-                       :success (dissoc success field-name)
-                       :errors (dissoc errors field-name))))
-          new-db (update-in
-                   new-db
                    [:forms form-name :validating field-name]
                    (fn [_] validating-message))]
       {:db new-db})))
@@ -134,17 +127,22 @@
 (rf/reg-event-fx
   ::on-change
   (fn [{:keys [db]} [_ {:keys [value form-name field-name validate-fn]}]]
-    (let [new-db (update-in db [:forms form-name] (fn [form-state]
-                                                    (let [new-form-state (assoc form-state field-name value)]
-                                                      (assoc-in
-                                                        new-form-state
-                                                        [:errors field-name]
-                                                        (validate-fn
-                                                          new-form-state
-                                                          form-name
-                                                          field-name
-                                                          start-validation
-                                                          end-validation)))))]
+    (let [new-db (update-in
+                   db
+                   [:forms form-name]
+                   (fn [{:as form-state :keys [success]}]
+                     (let [new-form-state (assoc form-state field-name value)
+                           new-form-state (assoc new-form-state :success (dissoc success field-name))]
+                       (let [errors (validate-fn
+                                      new-form-state
+                                      form-name
+                                      field-name
+                                      start-validation
+                                      end-validation)]
+                         (if errors
+                           (assoc-in new-form-state [:errors field-name] errors)
+                           (update new-form-state :errors (fn [errors]
+                                                            (dissoc errors field-name))))))))]
       {:db new-db})))
 
 (defn merge-props [form-props rest]
