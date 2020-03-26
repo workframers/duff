@@ -139,10 +139,22 @@
                                       field-name
                                       start-validation
                                       end-validation)]
-                         (if errors
+                         (cond
+                           (and (vector? errors)
+                                (not-empty errors))
                            (assoc-in new-form-state [:errors field-name] errors)
-                           (update new-form-state :errors (fn [errors]
-                                                            (dissoc errors field-name))))))))]
+
+                           (and (vector? errors)
+                                (empty? errors))
+                           (update new-form-state :errors
+                                   (fn [errors]
+                                     (let [errors (dissoc errors field-name)]
+                                       (when-not (empty? errors)
+                                         errors))))
+
+                           (or (map? errors)
+                               (nil? errors))
+                           (assoc new-form-state :errors errors))))))]
       {:db new-db})))
 
 (defn merge-props [form-props rest]
@@ -173,13 +185,13 @@
                         (let [{:keys [pred text]} validation]
                           (when (pred field-val)
                             text))
-                        (validation
-                          field-val
-                          (partial start-validation form-name field-name)
-                          (partial end-validation form-name field-name))))
+                        (when (fn? validation)
+                          (validation
+                            field-val
+                            (partial start-validation form-name field-name)
+                            (partial end-validation form-name field-name)))))
                     fns)]
-    (when-not (every? nil? errors)
-      errors)))
+    (vec (remove nil? errors))))
 
 (defn make-validation
   "Usage:
@@ -200,15 +212,16 @@
   [spec]
   (fn
     ([vals form-name start-validation end-validation]
-     (let [result (reduce-kv (fn [acc field-name fns*]
-                               (let [errors (field-errors
-                                              vals form-name field-name fns*
-                                              start-validation end-validation)]
-                                 (if errors
-                                   (assoc acc field-name errors)
-                                   acc)))
-                             {}
-                             spec)]
+     (let [result (reduce-kv
+                    (fn [acc field-name fns*]
+                      (let [errors (field-errors
+                                     vals form-name field-name fns*
+                                     start-validation end-validation)]
+                        (if (not-empty errors)
+                          (assoc acc field-name errors)
+                          acc)))
+                    {}
+                    spec)]
        (when (not (empty? result))
          result)))
     ([vals form-name field-name start-validation end-validation]
@@ -303,7 +316,7 @@
                                   :pristine?  pristine?
                                   :dirty?     dirty?
                                   :errors     errors
-                                  :errors?    (and errors dirty?)
+                                  :errors?    (and (not-empty errors) dirty?)
                                   :success    success
                                   :validating validating
                                   :field-name name
